@@ -8,7 +8,6 @@ import datetime
 
 ROBLOSECURITY_COOKIE = ""
 DISCORD_WEBHOOK_URL = ""
-#Paste your .ROBLOSECURITY cookie and discord webhook here
 
 ASSET_TYPE_NAMES = {
     1: "Image", 2: "T-Shirt", 3: "Audio", 4: "Mesh", 5: "Lua",
@@ -29,7 +28,7 @@ OUTPUT_FILES = {
     "for_sale": "roblox_old_forsale.txt"
 }
 
-DELAY_BETWEEN_REQUESTS = 0.1  # Increase to 0.5 if rate limited
+DELAY_BETWEEN_REQUESTS = 0.1
 RATE_LIMIT_BACKOFF = 0.5
 
 CLOTHING_TYPES = [2, 11, 12, 18]
@@ -45,19 +44,8 @@ YEAR_RANGES_ALL = {
     2012: (70_000_001, 100_000_000),
     2013: (100_000_001, 120_000_000),
     2014: (120_000_001, 150_000_000),
-    #150M+ is 2015
-    #140-150M is 2014
-    #100-120M is 2013
-    #70-100M is 2012
-    #40-70M is 2011
-    #20-40M is 2010
-    #5-20M is 2009
-    #-5M is 2008
-    #-2M is 2007
-
 }
 
-#These ranges have higher clothes density. So you get more clothes and less places/decals ect.
 CLOTHING_FOCUSED_RANGES = {
     2007: [(500_000, 1_000_000), (1_200_000, 1_800_000)],
     2008: [(3_500_000, 4_700_000)],
@@ -97,6 +85,11 @@ scan_filters = {
     "places": True,
     "accessories": True,
     "other": True
+}
+
+time_period_filters = {
+    "early": True,   # 2007-2010
+    "late": True     # 2011-2014
 }
 
 clothing_only_mode = False
@@ -141,23 +134,6 @@ def get_price_info(data):
     if is_for_sale:
         return f"{price_robux} R$ ({status})", True
     return f"Off-Sale (was {price_robux} R$)", False
-
-
-# def send_discord_message(asset_id, name, asset_type_name, price_info, category, is_for_sale):
-#     if not discord_enabled or not DISCORD_WEBHOOK_URL:
-#         return
-#     try:
-#         data = {
-#             "content": f"New Roblox {category.title()} Found!\n"
-#                       f"**ID:** {asset_id}\n"
-#                       f"**Name:** {name}\n"
-#                       f"**Type:** {asset_type_name}\n"
-#                       f"**Price:** {price_info}\n"
-#                       f"**Status:** {'FOR SALE!' if is_for_sale else 'Off-Sale'}"
-#         }
-#         requests.post(DISCORD_WEBHOOK_URL, json=data, timeout=5)
-#     except:
-#         pass
 
 
 def scan_asset(asset_id):
@@ -228,7 +204,6 @@ def scan_asset(asset_id):
         
         update_stats()
         
-        # Write to file if enabled
         output_file = OUTPUT_FILES[category]
         with open(output_file, "a", encoding="utf-8") as f:
             f.write(f"{asset_id} | {name} | {asset_type_name} | {price_info} | {created}\n")
@@ -237,15 +212,26 @@ def scan_asset(asset_id):
             with open(OUTPUT_FILES["for_sale"], "a", encoding="utf-8") as f:
                 f.write(f"{asset_id} | {name} | {asset_type_name} | {price_info} | {created}\n")
         
-#       send_discord_message(asset_id, name, asset_type_name, price_info, is_for_sale)
-        
     except Exception as e:
         log_message(f"[ERROR] ID: {asset_id} | {type(e).__name__}: {e}")
         update_stats()
 
-# Generates random id based on the scan mode
+
 def get_random_asset_id():
-    year = random.randint(2007, 2014)
+    """Get random ID based on time period filters and clothing mode"""
+    
+    available_years = []
+    
+    if time_period_filters["early"]:
+        available_years.extend([2007, 2008, 2009, 2010])
+    
+    if time_period_filters["late"]:
+        available_years.extend([2011, 2012, 2013, 2014])
+    
+    if not available_years:
+        available_years = [2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014]
+    
+    year = random.choice(available_years)
     
     if clothing_only_mode:
         ranges = CLOTHING_FOCUSED_RANGES[year]
@@ -295,8 +281,16 @@ def update_stats():
     
     mode = "CLOTHING FOCUS" if clothing_only_mode else "ALL TYPES"
     
+    # Show active time periods
+    periods = []
+    if time_period_filters["early"]:
+        periods.append("2007-2010")
+    if time_period_filters["late"]:
+        periods.append("2011-2014")
+    period_text = " + ".join(periods) if periods else "NONE"
+    
     stats_label.config(
-        text=f"{auth} | Mode: {mode} | Scanned: {stats['scanned']} | Skipped: {stats['skipped']} | "
+        text=f"{auth} | Mode: {mode} | Years: {period_text} | Scanned: {stats['scanned']} | Skipped: {stats['skipped']} | "
              f"Clothing: {stats['found_clothing']} | Places: {stats['found_places']} | "
              f"Accessories: {stats['found_accessories']} | Other: {stats['found_other']} | "
              f"For Sale: {stats['found_for_sale']} | Rate Limited: {stats['rate_limited']} | {rate:.1f} scans/sec"
@@ -345,15 +339,13 @@ def toggle_clothing_focus():
     
     if clothing_only_mode:
         log_message("\nCLOTHING FOCUS MODE ENABLED")
-        log_message("   → Scanning ID ranges with higher clothing density")
-        log_message("   → Should find more clothing, fewer places/models\n")
+        log_message("   → Scanning ID ranges with higher clothing density\n")
         clothing_focus_btn.config(
             text="Clothing Focus: ON",
             bg="gold"
         )
     else:
-        log_message("\nALL TYPES MODE")
-        log_message("   → Scanning all ID ranges equally\n")
+        log_message("\nALL TYPES MODE\n")
         clothing_focus_btn.config(
             text="Clothing Focus: OFF",
             bg="lightgray"
@@ -362,7 +354,32 @@ def toggle_clothing_focus():
     update_stats()
 
 
-# Main controls
+def toggle_time_period(period, period_name):
+    """Toggle time period filter"""
+    time_period_filters[period] = not time_period_filters[period]
+    
+    # Ensure at least one period is always enabled
+    if not time_period_filters["early"] and not time_period_filters["late"]:
+        time_period_filters[period] = True
+        log_message("Cannot disable both time periods! At least one must be active.")
+        return
+    
+    btn = early_years_btn if period == "early" else late_years_btn
+    
+    status = "ON" if time_period_filters[period] else "OFF"
+    btn.config(
+        text=f"{period_name}: {status}",
+        bg="lightblue" if time_period_filters[period] else "lightcoral"
+    )
+    
+    if time_period_filters[period]:
+        log_message(f"Now scanning {period_name}")
+    else:
+        log_message(f"Skipping {period_name}")
+    
+    update_stats()
+
+
 discord_btn = tk.Button(
     root, 
     text="Discord: ON", 
@@ -382,13 +399,31 @@ clothing_focus_btn = tk.Button(
 )
 clothing_focus_btn.pack(pady=5)
 
-info_label = tk.Label(
-    root, 
-    text="Clothing Focus scans ID ranges with more clothing items",
-    font=("Arial", 9),
-    fg="gray"
+separator1 = tk.Label(root, text="────── Time Periods ──────", font=("Arial", 9), fg="gray")
+separator1.pack(pady=5)
+
+early_years_btn = tk.Button(
+    root,
+    text="2007-2010: ON",
+    command=lambda: toggle_time_period("early", "2007-2010"),
+    bg="lightblue",
+    width=15,
+    font=("Arial", 10)
 )
-info_label.pack(pady=2)
+early_years_btn.pack(pady=2)
+
+late_years_btn = tk.Button(
+    root,
+    text="2011-2014: ON",
+    command=lambda: toggle_time_period("late", "2011-2014"),
+    bg="lightblue",
+    width=15,
+    font=("Arial", 10)
+)
+late_years_btn.pack(pady=2)
+
+separator2 = tk.Label(root, text="────── Item Types ──────", font=("Arial", 9), fg="gray")
+separator2.pack(pady=5)
 
 create_toggle("clothing", "Clothing")
 create_toggle("places", "Places")
