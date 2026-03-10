@@ -29,7 +29,7 @@ I know its possible to use proxies instead of your cookies but adding your cooki
 
 Run the scanner:
 ```bash
-python roblox_scanner_cleaned.py
+python CatalogScanner.py
 ```
 
 ## Improvements
